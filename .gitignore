@@ -1,0 +1,22 @@
+
+# Environnements virtuels Python
+.venv/
+venv/
+env/
+
+# Cache Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Variables d'environnement et secrets
+.env
+.env.*
+
+# Fichiers temporaires
+*.log
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Fichiers VS Code locaux
+.vscode/
