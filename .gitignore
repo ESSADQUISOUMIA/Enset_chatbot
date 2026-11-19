@@ -1,22 +1,8 @@
-
-# Environnements virtuels Python
 .venv/
 venv/
-env/
-
-# Cache Python
 __pycache__/
-*.pyc
-*.pyo
-
-# Variables d'environnement et secrets
+*.py[cod]
 .env
-.env.*
-
-# Fichiers temporaires
-*.log
-.pytest_cache/
-.ipynb_checkpoints/
-
-# Fichiers VS Code locaux
+.streamlit/secrets.toml
 .vscode/
+.idea/
