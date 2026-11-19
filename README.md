@@ -1,4 +1,4 @@
-# ENSET Chatbot 
+# ENSET Chatbot — Personne 1
 
 Chatbot local Streamlit + Ollama. Gestion de plusieurs conversations pendant une même session, sélection/suppression de discussions, export TXT/JSON, titre automatique et réponses en streaming.
 
