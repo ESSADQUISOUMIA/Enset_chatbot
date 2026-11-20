@@ -1,7 +1,6 @@
-
 import json
-import uuid
 from datetime import datetime
+from uuid import uuid4
 
 import streamlit as st
 
@@ -12,116 +11,113 @@ def _now() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
-# ---------------------------------------------------------------- état
-def init_conversations() -> None:
-    """À appeler au début de app.py : garantit qu'une conversation active existe."""
-    if "conversations" not in st.session_state:
-        st.session_state.conversations = {}
-    convs = st.session_state.conversations
-    current = st.session_state.get("current_conversation_id")
-    if current not in convs:
-        if convs:
-            st.session_state.current_conversation_id = list(convs)[-1]
-        else:
-            create_conversation()
-
-
-def create_conversation(model: str | None = None) -> str:
+# ------------------------------------------------------------------ état
+def create_conversation(model=None):
     """Crée une conversation vide et la rend active."""
-    conv_id = uuid.uuid4().hex[:8]
-    st.session_state.conversations[conv_id] = {
-        "id": conv_id,
+    cid = uuid4().hex[:8]
+    st.session_state.conversations[cid] = {
+        "id": cid,
         "title": DEFAULT_TITLE,
         "created_at": _now(),
         "model": model,
         "messages": [],
     }
-    st.session_state.current_conversation_id = conv_id
-    return conv_id
+    st.session_state.current_conversation_id = cid
+    return cid
 
 
-def select_conversation(conv_id: str) -> None:
-    if conv_id in st.session_state.conversations:
-        st.session_state.current_conversation_id = conv_id
-
-
-def delete_conversation(conv_id: str) -> None:
-    """Supprime une conversation ; bascule sur une autre (ou en crée une) si besoin."""
+def init_conversations():
+    """À appeler au début de app.py : garantit qu'une conversation active existe."""
+    st.session_state.setdefault("conversations", {})
     convs = st.session_state.conversations
-    convs.pop(conv_id, None)
-    if st.session_state.get("current_conversation_id") == conv_id:
+    if st.session_state.get("current_conversation_id") not in convs:
         if convs:
             st.session_state.current_conversation_id = list(convs)[-1]
         else:
             create_conversation()
 
 
-def get_current_conversation() -> dict:
+initialize_conversations = init_conversations  # alias de compatibilité
+
+
+def select_conversation(cid):
+    if cid in st.session_state.conversations:
+        st.session_state.current_conversation_id = cid
+
+
+def delete_conversation(cid):
+    """Supprime une conversation ; bascule sur une autre (ou en crée une) si besoin."""
+    convs = st.session_state.conversations
+    convs.pop(cid, None)
+    if st.session_state.get("current_conversation_id") == cid or not convs:
+        if convs:
+            st.session_state.current_conversation_id = list(convs)[-1]
+        else:
+            create_conversation()
+
+
+def get_current_conversation():
     return st.session_state.conversations[st.session_state.current_conversation_id]
 
 
-def list_conversations() -> list[dict]:
+def list_conversations():
     """Conversations de la plus récente à la plus ancienne."""
     return list(reversed(list(st.session_state.conversations.values())))
 
 
-# ------------------------------------------------------------ messages
-def add_message(role: str, content: str, model: str | None = None) -> bool:
-    """
-    Ajoute un message à la conversation active.
-    Retourne True si le titre a été mis à jour (1er message utilisateur),
-    pour que l'interface puisse rafraîchir la barre latérale.
+# -------------------------------------------------------------- messages
+def add_message(role, content, model=None):
+    """Ajoute un message à la conversation active.
+
+    Retourne True si le titre vient d'être défini (1er message utilisateur).
     """
     conv = get_current_conversation()
     msg = {"role": role, "content": content}
     if role == "assistant" and model:
-        msg["model"] = model  # quel modèle a répondu (llama3.2 ou qwen:0.5b)
+        msg["model"] = model
     conv["messages"].append(msg)
     if model:
         conv["model"] = model
     if role == "user" and conv["title"] == DEFAULT_TITLE:
         title = " ".join(content.split())
-        conv["title"] = title[:30] + ("…" if len(title) > 30 else "")
+        conv["title"] = title[:42] + ("…" if len(title) > 42 else "")
         return True
     return False
 
 
-def get_messages_for_model(conv: dict | None = None) -> list[dict]:
+def get_messages_for_model(conv=None):
     """Messages au format attendu par ollama.chat (role + content uniquement)."""
     conv = conv or get_current_conversation()
     return [{"role": m["role"], "content": m["content"]} for m in conv["messages"]]
 
 
-def models_used(conv: dict) -> list[str]:
+def models_used(conv):
     """Modèles ayant répondu dans la conversation, dans l'ordre d'apparition."""
     seen = []
     for m in conv["messages"]:
-        mod = m.get("model")
-        if mod and mod not in seen:
-            seen.append(mod)
+        if m.get("model") and m["model"] not in seen:
+            seen.append(m["model"])
     return seen
 
 
-# -------------------------------------------------------------- export
-def conversation_to_txt(conv: dict) -> str:
+# ---------------------------------------------------------------- export
+def get_export_txt(conversation):
     lines = [
-        f"Conversation : {conv['title']}",
-        f"Créée le     : {conv['created_at']}",
-        f"Modèles      : {', '.join(models_used(conv)) or 'N/A'}",
+        f"Conversation : {conversation['title']}",
+        f"Créée le     : {conversation.get('created_at', 'N/A')}",
+        f"Modèles      : {', '.join(models_used(conversation)) or 'N/A'}",
         "=" * 50,
         "",
     ]
-    for m in conv["messages"]:
-        who = "Utilisateur" if m["role"] == "user" else f"Assistant ({m.get('model', 'N/A')})"
-        lines += [f"[{who}]", m["content"], ""]
+    for msg in conversation["messages"]:
+        who = "Utilisateur" if msg["role"] == "user" else f"Assistant ({msg.get('model', 'N/A')})"
+        lines.extend([f"[{who}]", msg["content"], ""])
     return "\n".join(lines)
 
 
-def conversation_to_json(conv: dict) -> str:
-    return json.dumps(conv, ensure_ascii=False, indent=2)
+def get_export_json(conversation):
+    return json.dumps(conversation, ensure_ascii=False, indent=2)
 
 
-def all_conversations_to_json() -> str:
-    return json.dumps(
-        list(st.session_state.conversations.values()), ensure_ascii=False, indent=2
-    )
+def get_export_all_json():
+    return json.dumps(list(st.session_state.conversations.values()), ensure_ascii=False, indent=2)
